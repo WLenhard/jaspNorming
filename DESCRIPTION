@@ -1,0 +1,26 @@
+Package: jaspNorming
+Type: Package
+Title: Continuous and Conventional Norming with cNORM for JASP
+Version: 3.7.0
+Date: 2026-11-08
+Authors@R: c(
+    person("Wolfgang", "Lenhard", email = "wolfgang.lenhard@uni-wuerzburg.de", role = c("aut", "cre")),
+    person("Alexandra", "Lenhard", role = "aut")
+  )
+Maintainer: Wolfgang Lenhard <wolfgang.lenhard@uni-wuerzburg.de>
+Description: Conventional and regression-based continuous norming methods for psychometric,
+    biometric and medical test construction based on the cNORM package.
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+Depends:
+    R (>= 4.1.0)
+Imports:
+    cNORM (>= 3.3.0),
+    jaspBase,
+    jaspGraphs,
+    ggplot2 (>= 3.5.0),
+    stats,
+    utils,
+    grDevices
+Config/roxygen2/version: 8.0.0
