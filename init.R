@@ -39,3 +39,16 @@ if (!require("cNORM")) install.packages("cNORM")
 
 # Generate NAMESPACE and documentation
 devtools::document()
+
+
+
+
+
+
+library(jaspTools)
+setupJaspTools()                       # once; may take a while
+setPkgOption("module.dirs", getwd())   # working directory = module root
+
+opts <- analysisOptions("normingContinuous")
+opts$raw <- "raw"; opts$group <- "group"
+runAnalysis("normingContinuous", dataset = cNORM::elfe, options = opts)

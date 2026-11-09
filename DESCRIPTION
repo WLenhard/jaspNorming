@@ -16,7 +16,7 @@ LazyData: true
 Depends:
     R (>= 4.1.0)
 Imports:
-    cNORM (>= 3.3.0),
+    cNORM (>= 3.7.0),
     jaspBase,
     jaspGraphs,
     ggplot2 (>= 3.5.0),

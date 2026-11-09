@@ -1,7 +1,7 @@
-import QtQuick 2.12
-import QtQuick.Layouts 1.3
-import JASP.Controls 1.0
-import JASP.Widgets 1.0
+import QtQuick
+import QtQuick.Layouts
+import JASP
+import JASP.Controls
 
 Form {
     VariablesForm {
@@ -31,29 +31,28 @@ Form {
 
     DropDown {
         name: "method"
+        id: method
         label: qsTr("Modeling method")
-        values: ["taylor", "betabinomial", "shash", "cmp"]
-        titles: [
-            qsTr("Distribution-Free (Taylor Polynomials)"),
-            qsTr("Beta-Binomial (Item Counts / IRT)"),
-            qsTr("Sinh-Arcsinh (SHASH — Continuous)"),
-            qsTr("Conway-Maxwell-Poisson (CMP — Speeded / Counts)")
+        indexDefaultValue: 0
+        values: [
+            { label: qsTr("Distribution-Free (Taylor Polynomials)"),          value: "taylor" },
+            { label: qsTr("Beta-Binomial (Item Counts / IRT)"),               value: "betabinomial" },
+            { label: qsTr("Sinh-Arcsinh (SHASH — Continuous)"),               value: "shash" },
+            { label: qsTr("Conway-Maxwell-Poisson (CMP — Speeded / Counts)"), value: "cmp" }
         ]
-        defaultValue: "taylor"
     }
 
     DropDown {
         name: "scale"
         label: qsTr("Norm scale")
-        values: ["T", "IQ", "z", "Wechsler", "PISA"]
-        titles: [
-            qsTr("T (m = 50, sd = 10)"),
-            qsTr("IQ (m = 100, sd = 15)"),
-            qsTr("z (m = 0, sd = 1)"),
-            qsTr("Wechsler (m = 10, sd = 3)"),
-            qsTr("PISA (m = 500, sd = 100)")
+        indexDefaultValue: 0
+        values: [
+            { label: qsTr("T (m = 50, sd = 10)"),       value: "T" },
+            { label: qsTr("IQ (m = 100, sd = 15)"),     value: "IQ" },
+            { label: qsTr("z (m = 0, sd = 1)"),         value: "z" },
+            { label: qsTr("Wechsler (m = 10, sd = 3)"), value: "Wechsler" },
+            { label: qsTr("PISA (m = 500, sd = 100)"),  value: "PISA" }
         ]
-        defaultValue: "T"
     }
 
     Section {
@@ -64,17 +63,19 @@ Form {
             title: qsTr("Taylor Polynomial Options")
             visible: method.value === "taylor"
 
-            CheckBox { name: "descend"; label: qsTr("Invert ranking order (descending)"); defaultValue: false }
+            CheckBox { name: "descend"; label: qsTr("Invert ranking order (descending)") }
             IntegerField { name: "nGroups"; label: qsTr("Norm groups for continuous age (0 = auto)"); defaultValue: 0; min: 0; max: 50 }
-            CheckBox { name: "equidistant"; label: qsTr("Equidistant group intervals"); defaultValue: false }
+            CheckBox { name: "equidistant"; label: qsTr("Equidistant group intervals") }
             IntegerField { name: "k"; label: qsTr("Degree of location (k)"); defaultValue: 5; min: 1; max: 6 }
             IntegerField { name: "t"; label: qsTr("Degree of explanatory variable (t)"); defaultValue: 3; min: 1; max: 6 }
-            
+
             RadioButtonGroup {
                 name: "selectionType"
+                id: selectionType
                 RadioButton { value: "automaticSelection"; label: qsTr("Automatic term selection"); checked: true }
-                RadioButton { value: "manualSelection"; label: qsTr("Manual number of terms") }
+                RadioButton { value: "manualSelection";    label: qsTr("Manual number of terms") }
             }
+
             IntegerField {
                 name: "terms"
                 label: qsTr("Number of terms")
@@ -104,7 +105,7 @@ Form {
             IntegerField { name: "sigmaDegree"; label: qsTr("Degree of σ (scale)"); defaultValue: 2; min: 0; max: 5 }
             IntegerField { name: "epsilonDegree"; label: qsTr("Degree of ε (skewness)"); defaultValue: 2; min: 0; max: 5 }
             IntegerField { name: "deltaDegree"; label: qsTr("Degree of δ (tail weight)"); defaultValue: 1; min: 0; max: 5; enabled: !fixDelta.checked }
-            CheckBox { name: "fixDelta"; label: qsTr("Fix tail weight δ to constant"); defaultValue: false }
+            CheckBox { name: "fixDelta"; id: fixDelta; label: qsTr("Fix tail weight δ to constant") }
             DoubleField { name: "deltaValue"; label: qsTr("Fixed δ value"); defaultValue: 1.0; min: 0.1; max: 10.0; enabled: fixDelta.checked }
         }
 
@@ -115,7 +116,7 @@ Form {
 
             IntegerField { name: "cmpMuDegree"; label: qsTr("Degree of μ (location)"); defaultValue: 3; min: 1; max: 5 }
             IntegerField { name: "cmpNuDegree"; label: qsTr("Degree of ν (dispersion)"); defaultValue: 2; min: 0; max: 5; enabled: !cmpFixNu.checked }
-            CheckBox { name: "cmpFixNu"; label: qsTr("Fix dispersion ν (e.g., 1 = Poisson)"); defaultValue: false }
+            CheckBox { name: "cmpFixNu"; id: cmpFixNu; label: qsTr("Fix dispersion ν (e.g., 1 = Poisson)") }
             DoubleField { name: "cmpNuValue"; label: qsTr("Fixed ν value"); defaultValue: 1.0; min: 0.05; max: 20.0; enabled: cmpFixNu.checked }
             IntegerField { name: "cmpMaxScore"; label: qsTr("Maximum score ceiling (0 = untruncated)"); defaultValue: 0; min: 0 }
         }
@@ -124,8 +125,8 @@ Form {
     Section {
         title: qsTr("Output & Norm Table")
 
-        CheckBox { name: "model"; label: qsTr("Model fit and parameter estimates"); defaultValue: true }
-        CheckBox { name: "plot"; label: qsTr("Percentile curves plot"); defaultValue: true }
+        CheckBox { name: "model"; label: qsTr("Model fit and parameter estimates"); checked: true }
+        CheckBox { name: "plot";  label: qsTr("Percentile curves plot"); checked: true }
 
         Group {
             title: qsTr("Norm Table Specification")
@@ -140,7 +141,7 @@ Form {
         Group {
             title: qsTr("Confidence Intervals")
 
-            CheckBox { name: "includeCI"; label: qsTr("Include confidence intervals"); defaultValue: false }
+            CheckBox { name: "includeCI"; id: includeCI; label: qsTr("Include confidence intervals") }
             DoubleField { name: "ciLevel"; label: qsTr("Confidence level"); defaultValue: 0.90; min: 0.50; max: 0.999; enabled: includeCI.checked }
             DoubleField { name: "reliability"; label: qsTr("Reliability coefficient"); defaultValue: 0.90; min: 0.01; max: 0.999; enabled: includeCI.checked }
         }

@@ -1,5 +1,7 @@
 # R/common.R
 
+.cnormInternal <- function(name) utils::getFromNamespace(name, "cNORM")
+
 .resolveScale <- function(scale, sdRange = 3.0) {
   if (scale == "Wechsler") {
     m1 <- 10; sd1 <- 3
@@ -19,6 +21,13 @@
     minNorm = m1 - sdRange * sd1,
     maxNorm = m1 + sdRange * sd1
   )
+}
+
+.normingAsNumeric <- function(x, varName) {
+  out <- if (is.factor(x)) suppressWarnings(as.numeric(as.character(x))) else as.numeric(x)
+  if (all(is.na(out)) && !all(is.na(x)))
+    jaspBase::.quitAnalysis(gettextf("The variable '%s' must have numeric values.", varName))
+  out
 }
 
 .appendCI <- function(df, m1, sd1, ciVal, relVal) {

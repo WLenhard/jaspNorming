@@ -62,14 +62,16 @@ normingConventional <- function(jaspResults, dataset, options) {
     df <- dataset[, vars, drop = FALSE]
   }
   
-  x <- as.numeric(df[[options$raw]])
-  w <- if (nzchar(options$weights)) as.numeric(df[[options$weights]]) else NULL
+  x <- .normingAsNumeric(df[[options$raw]], options$raw)
+  w <- if (nzchar(options$weights)) .normingAsNumeric(df[[options$weights]], options$weights) else NULL
   
   cleanDF <- if (!is.null(w)) data.frame(raw = x, weights = w) else data.frame(raw = x)
   cleanDF <- na.omit(cleanDF)
   
-  if (nrow(cleanDF) < 5) jaspBase::reject(gettext("At least 5 valid observations are required."))
-  if (length(unique(cleanDF$raw)) < 2) jaspBase::reject(gettext("Raw score must contain at least 2 distinct values."))
+  if (nrow(cleanDF) < 5)
+    jaspBase::.quitAnalysis(gettext("At least 5 valid observations are required."))
+  if (length(unique(cleanDF$raw)) < 2)
+    jaspBase::.quitAnalysis(gettext("Raw score must contain at least 2 distinct values."))
   return(cleanDF)
 }
 

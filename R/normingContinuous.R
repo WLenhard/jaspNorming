@@ -19,7 +19,7 @@ normingContinuous <- function(jaspResults, dataset, options) {
   
   # 4. Diagnostic Percentile Plot
   if (isTRUE(options$plot)) {
-    .createContinuousPlot(jaspResults, modelState, options)
+    .createContinuousPlot(jaspResults, modelState, scaleInfo, options)
   }
   
   # 5. Model Fit & Coefficient Tables
@@ -45,34 +45,34 @@ normingContinuous <- function(jaspResults, dataset, options) {
     df <- dataset[, vars, drop = FALSE]
   }
   
-  x <- as.numeric(df[[options$raw]])
-  g <- as.numeric(df[[options$group]])
-  w <- if (nzchar(options$weights)) as.numeric(df[[options$weights]]) else NULL
+  x <- .normingAsNumeric(df[[options$raw]],   options$raw)
+  g <- .normingAsNumeric(df[[options$group]], options$group)
+  w <- if (nzchar(options$weights)) .normingAsNumeric(df[[options$weights]], options$weights) else NULL
   
   cleanDF <- if (!is.null(w)) data.frame(raw = x, group = g, weights = w) else data.frame(raw = x, group = g)
   cleanDF <- na.omit(cleanDF)
   
-  if (nrow(cleanDF) < 10) {
-    jaspBase::reject(gettext("At least 10 valid, complete observations are required."))
-  }
-  if (length(unique(cleanDF$raw)) < 2) {
-    jaspBase::reject(gettext("The raw score variable has zero variance."))
-  }
-  if (length(unique(cleanDF$group)) < 2) {
-    jaspBase::reject(gettext("The grouping variable has only 1 distinct value. Use Single Group Norming instead."))
-  }
+  if (nrow(cleanDF) < 10)
+    jaspBase::.quitAnalysis(gettext("At least 10 valid, complete observations are required."))
+  if (length(unique(cleanDF$raw)) < 2)
+    jaspBase::.quitAnalysis(gettext("The raw score variable has zero variance."))
+  if (length(unique(cleanDF$group)) < 2)
+    jaspBase::.quitAnalysis(gettext("The grouping variable has only 1 distinct value. Use Single Group Norming instead."))
   
   return(cleanDF)
 }
 
+.continuousModelDeps <- function() {
+  c("raw", "group", "weights", "method", "scale", "descend", "nGroups",
+    "equidistant", "k", "t", "selectionType", "terms", "alpha", "beta",
+    "itemnumber", "muDegree", "sigmaDegree", "epsilonDegree", "deltaDegree",
+    "fixDelta", "deltaValue", "cmpMuDegree", "cmpNuDegree", "cmpFixNu",
+    "cmpNuValue", "cmpMaxScore")
+}
+
 # --- Model Fitting with JASP State Caching ---
 .getContinuousModel <- function(jaspResults, dataComplete, scaleInfo, options) {
-  modelDeps <- c("raw", "group", "weights", "method", "scale", "descend", "nGroups",
-                 "equidistant", "k", "t", "selectionType", "terms", "alpha", "beta",
-                 "itemnumber", "muDegree", "sigmaDegree", "epsilonDegree", "deltaDegree",
-                 "fixDelta", "deltaValue", "cmpMuDegree", "cmpNuDegree", "cmpFixNu",
-                 "cmpNuValue", "cmpMaxScore")
-  
+
   if (!is.null(jaspResults[["modelState"]])) {
     return(jaspResults[["modelState"]]$object)
   }
@@ -174,20 +174,17 @@ normingContinuous <- function(jaspResults, dataset, options) {
     res$diag <- diag
   }
   
-  state <- jaspBase::createJaspState(res, dependencies = modelDeps)
+  state <- jaspBase::createJaspState(res, dependencies = .continuousModelDeps())
   jaspResults[["modelState"]] <- state
   return(res)
 }
 
 # --- Percentile Curves Plot ---
-.createContinuousPlot <- function(jaspResults, modelState, options) {
+.createContinuousPlot <- function(jaspResults, modelState, scaleInfo, options) {
   if (!is.null(jaspResults[["percentilePlot"]])) return()
   
   plot <- jaspBase::createJaspPlot(title = gettext("Percentile Curves"), width = 650, height = 450)
-  plot$dependOn(c("plot", "raw", "group", "weights", "method", "scale", "descend", "nGroups",
-                  "equidistant", "k", "t", "selectionType", "terms", "alpha", "beta", "itemnumber",
-                  "muDegree", "sigmaDegree", "epsilonDegree", "deltaDegree", "fixDelta", "deltaValue",
-                  "cmpMuDegree", "cmpNuDegree", "cmpFixNu", "cmpNuValue", "cmpMaxScore"))
+  plot$dependOn(c(.continuousModelDeps(), "plot"))
   plot$position <- 1
   
   percentiles <- c(0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975)
@@ -206,7 +203,7 @@ normingContinuous <- function(jaspResults, dataset, options) {
     p <- p + ggplot2::geom_point(data = data.frame(age = predAgeVec, raw = dp$raw),
                                  ggplot2::aes(x = age, y = raw), color = "black", alpha = 0.2, size = 0.7)
     
-    T_vals <- stats::qnorm(percentiles, mean = 50, sd = 10)
+    T_vals <- stats::qnorm(percentiles, mean = scaleInfo$m1, sd = scaleInfo$sd1)
     AGEP_pred <- seq(min(predAgeVec), max(predAgeVec), length.out = 100)
     predList <- lapply(seq_along(AGEP_pred), function(i) {
       yPred <- cNORM::predictRaw(T_vals, AGEP_pred[i], m$coefficients, minRaw = min(dp$raw), maxRaw = max(dp$raw))
@@ -224,28 +221,30 @@ normingContinuous <- function(jaspResults, dataset, options) {
     pred_ages <- seq(min(d$group), max(d$group), length.out = 100)
     
     if (method == "betabinomial") {
-      preds <- cNORM::predictCoefficients2(modelState$model, pred_ages, modelState$nMax)
+      predictCoefficients2 <- .cnormInternal("predictCoefficients2")
+      bb_distribution      <- .cnormInternal("bb_distribution")
+      preds <- predictCoefficients2(modelState$model, pred_ages, modelState$nMax)
       pMat <- vapply(seq_along(pred_ages), function(j) {
-        dist <- cNORM::bb_distribution(preds$a[j], preds$b[j], modelState$nMax)
+        dist <- bb_distribution(preds$a[j], preds$b[j], modelState$nMax)
         vapply(percentiles, function(pr) as.numeric(dist$x[which.max(dist$cum >= pr)]), numeric(1))
       }, numeric(length(percentiles)))
       pMat <- t(pMat)
     } else if (method == "shash") {
-      preds <- cNORM::predictCoefficients_shash(modelState$model, pred_ages)
+      preds <- .cnormInternal("predictCoefficients_shash")(modelState$model, pred_ages)
       pLines <- lapply(percentiles, function(pr) {
         cNORM::qshash(pr, mu = preds$mu, sigma = preds$sigma, epsilon = preds$epsilon, delta = preds$delta)
       })
       pMat <- do.call(cbind, pLines)
     } else if (method == "cmp") {
-      preds <- cNORM::predictCoefficients_cmp(modelState$model, pred_ages)
-      o <- cNORM::cmp_opts(modelState$model)
+      preds            <- .cnormInternal("predictCoefficients_cmp")(modelState$model, pred_ages)
+      o                <- .cnormInternal("cmp_opts")(modelState$model)
+      cmp_quantile_mid <- .cnormInternal("cmp_quantile_mid")
       pLines <- lapply(percentiles, function(pr) {
-        cNORM::cmp_quantile_mid(rep(pr, length(pred_ages)), mu = preds$mu, nu = preds$nu,
-                                tol = o$tol, max_terms = o$max_terms, max_score = o$max_score)
+        cmp_quantile_mid(rep(pr, length(pred_ages)), mu = preds$mu, nu = preds$nu,
+                         tol = o$tol, max_terms = o$max_terms, max_score = o$max_score)
       })
       pMat <- do.call(cbind, pLines)
-    }
-    
+    }    
     predList <- lapply(seq_along(percentiles), function(i) {
       data.frame(age = pred_ages, value = as.numeric(pMat[, i]), percentile = factor(levels[i], levels = levels))
     })
@@ -272,10 +271,7 @@ normingContinuous <- function(jaspResults, dataset, options) {
   if (!is.null(jaspResults[["modelFit"]])) return()
   
   table <- jaspBase::createJaspTable(title = gettext("Model Fit"))
-  table$dependOn(c("model", "raw", "group", "weights", "method", "k", "t", "selectionType", "terms",
-                   "alpha", "beta", "itemnumber", "muDegree", "sigmaDegree", "epsilonDegree",
-                   "deltaDegree", "fixDelta", "deltaValue", "cmpMuDegree", "cmpNuDegree", "cmpFixNu",
-                   "cmpNuValue", "cmpMaxScore"))
+  table$dependOn(c(.continuousModelDeps(), "model"))
   table$position <- 2
   
   table$addColumnInfo(name = "method", title = gettext("Method"), type = "string")
@@ -320,10 +316,7 @@ normingContinuous <- function(jaspResults, dataset, options) {
   if (!is.null(jaspResults[["modelCoef"]])) return()
   
   table <- jaspBase::createJaspTable(title = gettext("Parameter Estimates"))
-  table$dependOn(c("model", "raw", "group", "weights", "method", "k", "t", "selectionType", "terms",
-                   "alpha", "beta", "itemnumber", "muDegree", "sigmaDegree", "epsilonDegree",
-                   "deltaDegree", "fixDelta", "deltaValue", "cmpMuDegree", "cmpNuDegree", "cmpFixNu",
-                   "cmpNuValue", "cmpMaxScore"))
+  table$dependOn(c(.continuousModelDeps(), "model"))
   table$position <- 3
   
   table$addColumnInfo(name = "term", title = gettext("Term"),     type = "string")
