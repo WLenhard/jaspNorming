@@ -41,7 +41,7 @@ Form {
         title: qsTr("Regression Smoothing")
 
         CheckBox { name: "k"; id: kSmooth; label: qsTr("Smooth with polynomial regression"); checked: true }
-        IntegerField { name: "kPower"; label: qsTr("Degree of location (k)"); defaultValue: 5; min: 1; max: 6; enabled: kSmooth.checked }
+        IntegerField { name: "kPower"; id: kPowerField; label: qsTr("Degree of location (k)"); defaultValue: 5; min: 1; max: 6; enabled: kSmooth.checked }
 
         RadioButtonGroup {
             name: "selectionType"
@@ -56,7 +56,7 @@ Form {
             label: qsTr("Number of terms")
             defaultValue: 4
             min: 1
-            max: 6
+            max: Math.max(1, kPowerField.value)
             enabled: kSmooth.checked && selectionType.value === "manualSelection"
         }
     }

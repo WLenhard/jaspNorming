@@ -4,7 +4,4 @@ export(
   normingContinuous
 )
 
-import(cNORM)
 import(jaspBase)
-import(jaspGraphs)
-import(ggplot2)

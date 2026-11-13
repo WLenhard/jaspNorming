@@ -52,3 +52,17 @@ setPkgOption("module.dirs", getwd())   # working directory = module root
 opts <- analysisOptions("normingContinuous")
 opts$raw <- "raw"; opts$group <- "group"
 runAnalysis("normingContinuous", dataset = cNORM::elfe, options = opts)
+
+
+
+
+
+
+
+
+
+library(jaspTools); library(testthat)
+setPkgOption("module.dirs", getwd())
+testthat::test_file("tests/testthat/test-normingConventional.R")
+testthat::test_file("tests/testthat/test-normingContinuous.R")
+testthat::test_file("tests/testthat/test-normingPreparation.R")

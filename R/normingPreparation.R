@@ -22,22 +22,34 @@ normingPreparation <- function(jaspResults, dataset, options) {
 # ---- Norm groups -------------------------------------------------------------
 
 .runGrouping <- function(jaspResults, dataset, options) {
-  df <- if (is.null(dataset)) jaspBase::readDataSetToEnd(columns.as.numeric = options$age) else dataset[, options$age, drop = FALSE]
-  ageVals <- na.omit(.normingAsNumeric(df[[options$age]], options$age))
+  if (!is.null(jaspResults[["groupTab"]]) && !is.null(jaspResults[["groupPlot"]]))
+    return()
+  
+  df <- if (is.null(dataset)) {
+    jaspBase::.readDataSetToEnd(columns.as.numeric = options$age)
+  } else {
+    dataset[, options$age, drop = FALSE]
+  }
+  ageVals <- stats::na.omit(.normingAsNumeric(df[[options$age]], options$age))
   
   if (length(ageVals) < 6L)
     jaspBase::.quitAnalysis(gettext("At least 6 valid observations are required."))
   
-  nGroupsOpt <- as.integer(options$nGroups)
-  nArg       <- if (is.na(nGroupsOpt) || nGroupsOpt <= 0L) NULL else nGroupsOpt
+  nGroupsOpt   <- as.integer(options$nGroups)
+  nArg         <- if (is.na(nGroupsOpt) || nGroupsOpt <= 0L) NULL else nGroupsOpt
   grpMidpoints <- cNORM::getGroups(ageVals, n = nArg, equidistant = isTRUE(options$equidistant))
-  uMids <- sort(unique(grpMidpoints))
+  uMids        <- sort(unique(grpMidpoints))
   
-  # group summary, computed once and independent of what is cached
   summ <- do.call(rbind, lapply(seq_along(uMids), function(i) {
     vals <- ageVals[grpMidpoints == uMids[i]]
-    data.frame(grpNo = i, midpoint = uMids[i], minVal = min(vals), maxVal = max(vals),
-               n = length(vals), prop = length(vals) / length(ageVals) * 100)
+    data.frame(
+      grpNo    = i,
+      midpoint = uMids[i],
+      minVal   = min(vals),
+      maxVal   = max(vals),
+      n        = length(vals),
+      prop     = length(vals) / length(ageVals) * 100
+    )
   }))
   summ$label <- sprintf("%.2f\n[%.1f-%.1f]", summ$midpoint, summ$minVal, summ$maxVal)
   
@@ -64,14 +76,21 @@ normingPreparation <- function(jaspResults, dataset, options) {
     
     pDF <- summ
     pDF$labelFactor <- factor(pDF$label, levels = pDF$label)
+    angled <- nrow(pDF) > 8L
     
     p <- ggplot2::ggplot(pDF, ggplot2::aes(x = labelFactor, y = n)) +
       ggplot2::geom_col(fill = "#3E6DA9", alpha = 0.85, width = 0.65) +
       ggplot2::geom_hline(yintercept = 100, linetype = "dashed", color = "#2ca25f", linewidth = 0.7) +
       ggplot2::geom_hline(yintercept = 50,  linetype = "dotted", color = "#d95f02", linewidth = 0.7) +
       ggplot2::labs(x = gettext("Group Midpoint [Range]"), y = gettext("Sample Size (N)")) +
-      jaspGraphs::themeJaspRaw() +
-      ggplot2::theme(axis.text.x = ggplot2::element_text(angle = if (nrow(pDF) > 8) 35 else 0, hjust = 1))
+      .normingPlotTheme(legendPos = "none") +
+      ggplot2::theme(
+        axis.text.x = ggplot2::element_text(
+          size  = 9.5,
+          angle = if (angled) 35 else 0,
+          hjust = if (angled) 1 else 0.5
+        )
+      )
     
     plot$plotObject <- p
     jaspResults[["groupPlot"]] <- plot
@@ -80,70 +99,85 @@ normingPreparation <- function(jaspResults, dataset, options) {
 
 # ---- Raking ------------------------------------------------------------------
 
-# Checks the user-supplied population proportions before they are handed to cNORM.
-# `marginsDF` has columns variables (already encoded), levels and share.
-.validateMargins <- function(marginsDF, stratVars) {
-  shown <- function(x) paste(jaspBase::decodeColNames(x, strict = TRUE), collapse = ", ")
+.validateAndEncodeMargins <- function(marginsDF, stratVars) {
+  stratDecoded <- jaspBase::decodeColNames(stratVars)
   
-  unknown <- setdiff(unique(marginsDF$variables), stratVars)
+  unknown <- setdiff(unique(marginsDF$variables), stratDecoded)
   if (length(unknown) > 0L)
     jaspBase::.quitAnalysis(gettextf(
       "The population proportions refer to variable(s) that are not among the stratification variables: %s.",
-      shown(unknown)))
+      paste(unknown, collapse = ", ")
+    ))
   
-  if (anyNA(marginsDF$share) || any(marginsDF$share < 0))
-    jaspBase::.quitAnalysis(gettext("The population proportions must be non-negative numbers."))
+  if (anyNA(marginsDF$share) || any(!is.finite(marginsDF$share) | marginsDF$share < 0))
+    jaspBase::.quitAnalysis(gettext("The population proportions must be non-negative finite numbers."))
   
-  # cNORM expects the shares of each variable to add up to (roughly) 1
   sums <- tapply(marginsDF$share, marginsDF$variables, sum)
   bad  <- names(sums)[abs(sums - 1) > 0.05]
   if (length(bad) > 0L)
     jaspBase::.quitAnalysis(gettextf(
       "The proportions of each variable must add up to approximately 1 (between 0.95 and 1.05). This is not the case for: %s.",
-      paste0(jaspBase::decodeColNames(bad, strict = TRUE), " (", format(round(sums[bad], 3), nsmall = 2), ")", collapse = ", ")))
+      paste0(bad, " (", format(round(sums[bad], 3), nsmall = 2), ")", collapse = ", ")
+    ))
+  
+  nameMap <- stats::setNames(stratVars, stratDecoded)
+  marginsDF$variables <- unname(nameMap[marginsDF$variables])
+  marginsDF
 }
 
 .runRaking <- function(jaspResults, dataset, options) {
+  if (!is.null(jaspResults[["marginsTab"]]) && !is.null(jaspResults[["weightSummaryTab"]]))
+    return()
+  
   stratVars <- unlist(options$stratVars)
-  df <- if (is.null(dataset)) jaspBase::readDataSetToEnd(columns = stratVars) else dataset[, stratVars, drop = FALSE]
-  df <- na.omit(df)
-  for (v in stratVars) df[[v]] <- as.character(df[[v]])
+  df <- if (is.null(dataset)) {
+    jaspBase::.readDataSetToEnd(columns = stratVars)
+  } else {
+    dataset[, stratVars, drop = FALSE]
+  }
+  df <- stats::na.omit(df)
   nTotal <- nrow(df)
   
-  # --- population proportions typed by the user --------------------------------
+  if (nTotal < 2L)
+    jaspBase::.quitAnalysis(gettext("At least 2 complete observations across the stratification variables are required."))
+  
+  for (v in stratVars) df[[v]] <- as.character(df[[v]])
+  
   marginsText <- options$margins
   marginsDF   <- .parseMarginsString(marginsText)
   
   if (is.null(marginsDF) && !is.null(marginsText) && nzchar(trimws(marginsText)))
     jaspBase::.quitAnalysis(gettext(
-      "The population proportions could not be read. Use the format: variable: level=share, level=share; variable: level=share, ..."))
+      "The population proportions could not be read. Use the format: variable: level=share, level=share; variable: level=share, ..."
+    ))
   
-  if (!is.null(marginsDF)) {
-    # The user types the real variable names, but inside the analysis the data columns
-    # (and options$stratVars) carry JASP's encoded names. Translate before comparing.
-    marginsDF$variables <- jaspBase::encodeColNames(marginsDF$variables, strict = TRUE)
-    .validateMargins(marginsDF, stratVars)
-  }
+  if (!is.null(marginsDF))
+    marginsDF <- .validateAndEncodeMargins(marginsDF, stratVars)
+  
   hasTarget <- !is.null(marginsDF)
   
-  # --- raking ------------------------------------------------------------------
-  rakeError <- NULL
+  rakeError    <- NULL
   rakedWeights <- NULL
   if (hasTarget) {
     rakedWeights <- tryCatch(
-      suppressMessages(cNORM::computeWeights(data = df, population.margins = marginsDF,
-                                             standardized = isTRUE(options$standardized))),
-      error = function(e) { rakeError <<- conditionMessage(e); NULL })
+      suppressMessages(cNORM::computeWeights(
+        data               = df,
+        population.margins = marginsDF,
+        standardized       = isTRUE(options$standardized)
+      )),
+      error = function(e) { rakeError <<- conditionMessage(e); NULL }
+    )
   }
   rakeFootnote <- function(tbl) {
     if (!is.null(rakeError))
-      tbl$addFootnote(gettextf("Raking failed: %s", jaspBase::decodeColNames(rakeError)),
-                      symbol = gettext("<em>Error:</em>"))
+      tbl$addFootnote(
+        gettextf("Raking failed: %s", jaspBase::decodeColNames(rakeError)),
+        symbol = gettext("<em>Error:</em>")
+      )
   }
   
   deps <- c("stratVars", "margins", "standardized")
   
-  # --- marginals table ---------------------------------------------------------
   if (is.null(jaspResults[["marginsTab"]])) {
     tab <- jaspBase::createJaspTable(title = gettext("Stratification Marginals & Raking Weights"))
     tab$dependOn(deps)
@@ -156,8 +190,10 @@ normingPreparation <- function(jaspResults, dataset, options) {
     tab$addColumnInfo(name = "tPr",  title = gettext("Target Prop."),      type = "number")
     tab$addColumnInfo(name = "cWgt", title = gettext("Mean Raked Weight"), type = "number")
     
+    rows <- list()
     for (v in stratVars) {
-      tb <- table(df[[v]])
+      tb   <- table(df[[v]])
+      vLab <- jaspBase::decodeColNames(v)
       for (lvl in names(tb)) {
         n_lvl    <- as.integer(tb[[lvl]])
         t_prop   <- NA_real_
@@ -170,17 +206,24 @@ normingPreparation <- function(jaspResults, dataset, options) {
         if (!is.null(rakedWeights))
           c_weight <- mean(rakedWeights[df[[v]] == lvl], na.rm = TRUE)
         
-        tab$addRows(list(list(
-          var = v, lvl = as.character(lvl), n = n_lvl,
-          sPr = n_lvl / nTotal, tPr = t_prop, cWgt = c_weight
-        )))
+        rows[[length(rows) + 1L]] <- data.frame(
+          var  = vLab,
+          lvl  = as.character(lvl),
+          n    = n_lvl,
+          sPr  = n_lvl / nTotal,
+          tPr  = t_prop,
+          cWgt = c_weight,
+          stringsAsFactors = FALSE
+        )
       }
     }
+    if (length(rows) > 0L)
+      tab$setData(do.call(rbind, rows))
+    
     rakeFootnote(tab)
     jaspResults[["marginsTab"]] <- tab
   }
   
-  # --- weight diagnostics table (always has exactly one row) --------------------
   if (is.null(jaspResults[["weightSummaryTab"]])) {
     wTab <- jaspBase::createJaspTable(title = gettext("Raking Weight Diagnostics"))
     wTab$dependOn(deps)

@@ -11,7 +11,7 @@ Form {
             name: "age"
             title: qsTr("Continuous Explanatory Variable (e.g., Age)")
             singleVariable: true
-            allowedColumns: ["scale"]
+            allowedColumns: ["scale", "ordinal"]
         }
 
         AssignedVariablesList {
@@ -31,11 +31,20 @@ Form {
     Section {
         title: qsTr("Raking Weights (computeWeights)")
 
-        TextField {
-            name: "margins"
-            label: qsTr("Population proportions (e.g., sex: 1=0.52, 2=0.48; migration: 0=0.70, 1=0.30)")
-            defaultValue: ""
+        Group {
+            title: qsTr("Target Population Marginals")
+            Layout.columnSpan: 2
+
+            TextField {
+                name: "margins"
+                label: qsTr("Proportions (var: lvl=p, ...)")
+                defaultValue: ""
+                fieldWidth: 280
+            }
+            Label {
+                text: qsTr("Example: sex: 1=0.52, 2=0.48; migration: 0=0.70, 1=0.30")
+            }
+            CheckBox { name: "standardized"; label: qsTr("Standardize raking weights (min weight = 1)"); checked: true }
         }
-        CheckBox { name: "standardized"; label: qsTr("Standardize raking weights (min weight = 1)"); checked: true }
     }
 }

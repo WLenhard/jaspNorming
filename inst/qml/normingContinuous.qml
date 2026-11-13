@@ -61,13 +61,14 @@ Form {
         // --- Taylor Polynomials ---
         Group {
             title: qsTr("Taylor Polynomial Options")
+            Layout.columnSpan: 2
             visible: method.value === "taylor"
 
             CheckBox { name: "descend"; label: qsTr("Invert ranking order (descending)") }
             IntegerField { name: "nGroups"; label: qsTr("Norm groups for continuous age (0 = auto)"); defaultValue: 0; min: 0; max: 50 }
             CheckBox { name: "equidistant"; label: qsTr("Equidistant group intervals") }
-            IntegerField { name: "k"; label: qsTr("Degree of location (k)"); defaultValue: 5; min: 1; max: 6 }
-            IntegerField { name: "t"; label: qsTr("Degree of explanatory variable (t)"); defaultValue: 3; min: 1; max: 6 }
+            IntegerField { name: "k"; id: kField; label: qsTr("Degree of location (k)"); defaultValue: 5; min: 1; max: 6 }
+            IntegerField { name: "t"; id: tField; label: qsTr("Degree of explanatory variable (t)"); defaultValue: 3; min: 1; max: 6 }
 
             RadioButtonGroup {
                 name: "selectionType"
@@ -81,7 +82,7 @@ Form {
                 label: qsTr("Number of terms")
                 defaultValue: 4
                 min: 1
-                max: 48
+                max: Math.max(1, kField.value * tField.value + kField.value + tField.value)
                 enabled: selectionType.value === "manualSelection"
             }
         }
@@ -89,6 +90,7 @@ Form {
         // --- Beta-Binomial ---
         Group {
             title: qsTr("Beta-Binomial Options")
+            Layout.columnSpan: 2
             visible: method.value === "betabinomial"
 
             IntegerField { name: "alpha"; label: qsTr("Degree of α (alpha)"); defaultValue: 3; min: 0; max: 5 }
@@ -99,6 +101,7 @@ Form {
         // --- SHASH ---
         Group {
             title: qsTr("Sinh-Arcsinh (SHASH) Options")
+            Layout.columnSpan: 2
             visible: method.value === "shash"
 
             IntegerField { name: "muDegree"; label: qsTr("Degree of μ (location)"); defaultValue: 3; min: 0; max: 5 }
@@ -112,6 +115,7 @@ Form {
         // --- CMP ---
         Group {
             title: qsTr("Conway-Maxwell-Poisson (CMP) Options")
+            Layout.columnSpan: 2
             visible: method.value === "cmp"
 
             IntegerField { name: "cmpMuDegree"; label: qsTr("Degree of μ (location)"); defaultValue: 3; min: 1; max: 5 }
@@ -131,10 +135,15 @@ Form {
         Group {
             title: qsTr("Norm Table Specification")
 
-            TextField { name: "normAge"; label: qsTr("Value for norm table (e.g., specific age)"); defaultValue: "" }
+            TextField {
+                name: "normAge"
+                label: qsTr("Value for norm table (e.g., age)")
+                defaultValue: ""
+                fieldWidth: 100
+            }
             DoubleField { name: "range"; label: qsTr("Norm score range (± SD)"); defaultValue: 3.0; min: 0.5; max: 6.0 }
-            DoubleField { name: "minRaw"; label: qsTr("Minimum raw score"); defaultValue: 0 }
-            DoubleField { name: "maxRaw"; label: qsTr("Maximum raw score (0 = auto)"); defaultValue: 0 }
+            DoubleField { name: "minRaw"; label: qsTr("Minimum raw score"); defaultValue: 0; enabled: method.value !== "betabinomial" }
+            DoubleField { name: "maxRaw"; label: qsTr("Maximum raw score (0 = auto)"); defaultValue: 0; enabled: method.value !== "betabinomial" }
             DoubleField { name: "stepping"; label: qsTr("Step size"); defaultValue: 1.0; min: 0.01; enabled: method.value !== "betabinomial" }
         }
 
