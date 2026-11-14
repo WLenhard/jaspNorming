@@ -1,4 +1,22 @@
+# R & RStudio
 .Rproj.user
 .Rhistory
 .RData
 .Ruserdata
+*.Rcheck/
+*.tar.gz
+*.tgz
+*.zip
+
+# JASP local build artifacts
+*.jaspmodule
+logs/
+
+# renv local library/cache (keep renv.lock tracked in Git!)
+renv/library/
+renv/local/
+renv/cellar/
+renv/lock/
+renv/python/
+renv/sandbox/
+renv/staging/

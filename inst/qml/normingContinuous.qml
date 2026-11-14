@@ -58,7 +58,6 @@ Form {
     Section {
         title: qsTr("Model Parameters")
 
-        // --- Taylor Polynomials ---
         Group {
             title: qsTr("Taylor Polynomial Options")
             Layout.columnSpan: 2
@@ -87,7 +86,6 @@ Form {
             }
         }
 
-        // --- Beta-Binomial ---
         Group {
             title: qsTr("Beta-Binomial Options")
             Layout.columnSpan: 2
@@ -98,7 +96,6 @@ Form {
             IntegerField { name: "itemnumber"; label: qsTr("Number of items in test (0 = max observed)"); defaultValue: 0; min: 0 }
         }
 
-        // --- SHASH ---
         Group {
             title: qsTr("Sinh-Arcsinh (SHASH) Options")
             Layout.columnSpan: 2
@@ -112,7 +109,6 @@ Form {
             DoubleField { name: "deltaValue"; label: qsTr("Fixed δ value"); defaultValue: 1.0; min: 0.1; max: 10.0; enabled: fixDelta.checked }
         }
 
-        // --- CMP ---
         Group {
             title: qsTr("Conway-Maxwell-Poisson (CMP) Options")
             Layout.columnSpan: 2
@@ -153,6 +149,29 @@ Form {
             CheckBox { name: "includeCI"; id: includeCI; label: qsTr("Include confidence intervals") }
             DoubleField { name: "ciLevel"; label: qsTr("Confidence level"); defaultValue: 0.90; min: 0.50; max: 0.999; enabled: includeCI.checked }
             DoubleField { name: "reliability"; label: qsTr("Reliability coefficient"); defaultValue: 0.90; min: 0.01; max: 0.999; enabled: includeCI.checked }
+        }
+
+        Group {
+            title: qsTr("Save to Dataset")
+            Layout.columnSpan: 2
+
+            CheckBox { name: "saveNorm"; id: saveNorm; label: qsTr("Save predicted norm scores") }
+            TextField {
+                name: "normColName"
+                label: qsTr("Norm score column name")
+                defaultValue: ""
+                fieldWidth: 140
+                enabled: saveNorm.checked
+            }
+
+            CheckBox { name: "savePerc"; id: savePerc; label: qsTr("Save predicted percentiles") }
+            TextField {
+                name: "percColName"
+                label: qsTr("Percentile column name")
+                defaultValue: ""
+                fieldWidth: 140
+                enabled: savePerc.checked
+            }
         }
     }
 }

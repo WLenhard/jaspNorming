@@ -2,6 +2,8 @@
 
 #' @export
 normingContinuous <- function(jaspResults, dataset, options) {
+  .normingAddCitations(jaspResults, "continuous", options)
+  
   # 1. Check requirements
   ready <- (options$raw != "" && options$group != "")
   if (!ready) {
@@ -29,8 +31,13 @@ normingContinuous <- function(jaspResults, dataset, options) {
   }
   
   # 6. Norm Score Lookup Table
-  if (nzchar(trimws(options$normAge))) {
+  if (!is.null(options$normAge) && nzchar(trimws(options$normAge))) {
     .createContinuousNormTable(jaspResults, modelState, scaleInfo, options)
+  }
+  
+  # 7. Save Predicted Norm Scores / Percentiles to Dataset
+  if (isTRUE(options$saveNorm) || isTRUE(options$savePerc)) {
+    .saveContinuousPredictions(jaspResults, dataComplete, modelState, scaleInfo, options)
   }
 }
 
@@ -49,8 +56,9 @@ normingContinuous <- function(jaspResults, dataset, options) {
   g <- .normingAsNumeric(df[[options$group]], options$group)
   w <- if (nzchar(options$weights)) .normingAsNumeric(df[[options$weights]], options$weights) else NULL
   
-  cleanDF <- if (!is.null(w)) data.frame(raw = x, group = g, weights = w) else data.frame(raw = x, group = g)
-  cleanDF <- stats::na.omit(cleanDF)
+  fullDF   <- if (!is.null(w)) data.frame(raw = x, group = g, weights = w) else data.frame(raw = x, group = g)
+  validIdx <- which(stats::complete.cases(fullDF))
+  cleanDF  <- fullDF[validIdx, , drop = FALSE]
   
   if (nrow(cleanDF) < 10L)
     jaspBase::.quitAnalysis(gettext("At least 10 valid, complete observations are required."))
@@ -61,6 +69,8 @@ normingContinuous <- function(jaspResults, dataset, options) {
   if (!is.null(w) && any(!is.finite(cleanDF$weights) | cleanDF$weights <= 0))
     jaspBase::.quitAnalysis(gettext("All case weights must be positive finite numbers."))
   
+  attr(cleanDF, "validIdx")  <- validIdx
+  attr(cleanDF, "nRowsFull") <- nrow(fullDF)
   return(cleanDF)
 }
 
@@ -204,6 +214,75 @@ normingContinuous <- function(jaspResults, dataset, options) {
   state <- jaspBase::createJaspState(res, dependencies = .continuousModelDeps())
   jaspResults[["modelState"]] <- state
   return(res)
+}
+
+# --- Save Individual Predictions to Dataset ---
+.saveContinuousPredictions <- function(jaspResults, dataComplete, modelState, scaleInfo, options) {
+  wantNorm <- isTRUE(options$saveNorm) && !is.null(options$normColName) && nzchar(trimws(options$normColName))
+  wantPerc <- isTRUE(options$savePerc) && !is.null(options$percColName) && nzchar(trimws(options$percColName))
+  if (!wantNorm && !wantPerc) return()
+  
+  needNormCompute <- wantNorm && is.null(jaspResults[["savedContNormCol"]])
+  needPercCompute <- wantPerc && is.null(jaspResults[["savedContPercCol"]])
+  if (!needNormCompute && !needPercCompute) return()
+  
+  validIdx  <- attr(dataComplete, "validIdx")
+  nRowsFull <- attr(dataComplete, "nRowsFull")
+  rawValid  <- dataComplete$raw
+  ageValid  <- dataComplete$group
+  sdRange   <- as.numeric(options$range)
+  
+  predNorm <- tryCatch({
+    if (modelState$method == "taylor") {
+      suppressMessages(cNORM::predictNorm(
+        raw     = rawValid,
+        A       = ageValid,
+        model   = modelState$model,
+        minNorm = scaleInfo$minNorm,
+        maxNorm = scaleInfo$maxNorm,
+        silent  = TRUE
+      ))
+    } else if (modelState$method %in% c("betabinomial", "cmp")) {
+      suppressWarnings(stats::predict(
+        modelState$model,
+        age   = ageValid,
+        score = as.integer(round(rawValid)),
+        range = sdRange
+      ))
+    } else if (modelState$method == "shash") {
+      suppressWarnings(stats::predict(
+        modelState$model,
+        age   = ageValid,
+        score = rawValid,
+        range = sdRange
+      ))
+    }
+  }, error = function(e) rep(NA_real_, length(rawValid)))
+  
+  if (wantNorm) {
+    fullNorm <- rep(NA_real_, nRowsFull)
+    fullNorm[validIdx] <- as.numeric(predNorm)
+    .saveScaleColumn(
+      jaspResults = jaspResults,
+      key         = "savedContNormCol",
+      colName     = options$normColName,
+      values      = fullNorm,
+      deps        = c(.continuousModelDeps(), "range", "saveNorm", "normColName")
+    )
+  }
+  
+  if (wantPerc) {
+    predPerc <- stats::pnorm((as.numeric(predNorm) - scaleInfo$m1) / scaleInfo$sd1) * 100
+    fullPerc <- rep(NA_real_, nRowsFull)
+    fullPerc[validIdx] <- predPerc
+    .saveScaleColumn(
+      jaspResults = jaspResults,
+      key         = "savedContPercCol",
+      colName     = options$percColName,
+      values      = fullPerc,
+      deps        = c(.continuousModelDeps(), "range", "savePerc", "percColName")
+    )
+  }
 }
 
 # --- Percentile Curves Plot ---

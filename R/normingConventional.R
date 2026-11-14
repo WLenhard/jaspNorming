@@ -2,6 +2,8 @@
 
 #' @export
 normingConventional <- function(jaspResults, dataset, options) {
+  .normingAddCitations(jaspResults, "conventional", options)
+  
   ready <- (options$raw != "")
   if (!ready) {
     .normingInstructions(jaspResults, "conventional")
@@ -26,6 +28,11 @@ normingConventional <- function(jaspResults, dataset, options) {
   
   # 3. Norm Score Table
   .createConventionalTable(jaspResults, dataRanked, model, scaleInfo, options)
+  
+  # 4. Save Individual Norm Scores / Percentiles to Dataset
+  if (isTRUE(options$saveNorm) || isTRUE(options$savePerc)) {
+    .saveConventionalPredictions(jaspResults, dataComplete, dataRanked, model, scaleInfo, options)
+  }
 }
 
 .conventionalModelDeps <- function() {
@@ -46,8 +53,9 @@ normingConventional <- function(jaspResults, dataset, options) {
   x <- .normingAsNumeric(df[[options$raw]], options$raw)
   w <- if (nzchar(options$weights)) .normingAsNumeric(df[[options$weights]], options$weights) else NULL
   
-  cleanDF <- if (!is.null(w)) data.frame(raw = x, weights = w) else data.frame(raw = x)
-  cleanDF <- stats::na.omit(cleanDF)
+  fullDF   <- if (!is.null(w)) data.frame(raw = x, weights = w) else data.frame(raw = x)
+  validIdx <- which(stats::complete.cases(fullDF))
+  cleanDF  <- fullDF[validIdx, , drop = FALSE]
   
   if (nrow(cleanDF) < 5L)
     jaspBase::.quitAnalysis(gettext("At least 5 valid observations are required."))
@@ -56,6 +64,8 @@ normingConventional <- function(jaspResults, dataset, options) {
   if (!is.null(w) && any(!is.finite(cleanDF$weights) | cleanDF$weights <= 0))
     jaspBase::.quitAnalysis(gettext("All case weights must be positive finite numbers."))
   
+  attr(cleanDF, "validIdx")  <- validIdx
+  attr(cleanDF, "nRowsFull") <- nrow(fullDF)
   return(cleanDF)
 }
 
@@ -100,6 +110,65 @@ normingConventional <- function(jaspResults, dataset, options) {
   res <- list(dataRanked = dataRanked, model = model)
   jaspResults[["convState"]] <- jaspBase::createJaspState(res, dependencies = .conventionalModelDeps())
   return(res)
+}
+
+# --- Save Individual Predictions to Dataset ---
+.saveConventionalPredictions <- function(jaspResults, dataComplete, dataRanked, model, scaleInfo, options) {
+  wantNorm <- isTRUE(options$saveNorm) && !is.null(options$normColName) && nzchar(trimws(options$normColName))
+  wantPerc <- isTRUE(options$savePerc) && !is.null(options$percColName) && nzchar(trimws(options$percColName))
+  if (!wantNorm && !wantPerc) return()
+  
+  needNormCompute <- wantNorm && is.null(jaspResults[["savedConvNormCol"]])
+  needPercCompute <- wantPerc && is.null(jaspResults[["savedConvPercCol"]])
+  if (!needNormCompute && !needPercCompute) return()
+  
+  validIdx  <- attr(dataComplete, "validIdx")
+  nRowsFull <- attr(dataComplete, "nRowsFull")
+  rawValid  <- dataComplete$raw
+  
+  if (!is.null(model)) {
+    predNorm <- tryCatch(
+      suppressMessages(cNORM::predictNorm(
+        raw     = rawValid,
+        A       = rep(0, length(rawValid)),
+        model   = model,
+        minNorm = scaleInfo$minNorm,
+        maxNorm = scaleInfo$maxNorm,
+        silent  = TRUE
+      )),
+      error = function(e) rep(NA_real_, length(rawValid))
+    )
+    predPerc <- stats::pnorm((as.numeric(predNorm) - scaleInfo$m1) / scaleInfo$sd1) * 100
+  } else {
+    lookup   <- unique(data.frame(raw = dataRanked$raw, norm = dataRanked$normValue, perc = dataRanked$percentile * 100))
+    mIdx     <- match(rawValid, lookup$raw)
+    predNorm <- lookup$norm[mIdx]
+    predPerc <- lookup$perc[mIdx]
+  }
+  
+  if (wantNorm) {
+    fullNorm <- rep(NA_real_, nRowsFull)
+    fullNorm[validIdx] <- as.numeric(predNorm)
+    .saveScaleColumn(
+      jaspResults = jaspResults,
+      key         = "savedConvNormCol",
+      colName     = options$normColName,
+      values      = fullNorm,
+      deps        = c(.conventionalModelDeps(), "range", "saveNorm", "normColName")
+    )
+  }
+  
+  if (wantPerc) {
+    fullPerc <- rep(NA_real_, nRowsFull)
+    fullPerc[validIdx] <- as.numeric(predPerc)
+    .saveScaleColumn(
+      jaspResults = jaspResults,
+      key         = "savedConvPercCol",
+      colName     = options$percColName,
+      values      = fullPerc,
+      deps        = c(.conventionalModelDeps(), "range", "savePerc", "percColName")
+    )
+  }
 }
 
 # --- Plot ---
@@ -200,9 +269,9 @@ normingConventional <- function(jaspResults, dataset, options) {
     coefTab$addColumnInfo(name = "term", title = gettext("Term"),     type = "string")
     coefTab$addColumnInfo(name = "est",  title = gettext("Estimate"), type = "number")
     
-    coefs <- model$coefficients
+    coefs  <- model$coefficients
     tNames <- if (!is.null(names(coefs))) names(coefs) else paste0("Term_", seq_along(coefs))
-    outDF <- data.frame(
+    outDF  <- data.frame(
       term = tNames,
       est  = as.numeric(coefs),
       stringsAsFactors = FALSE

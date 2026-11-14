@@ -1,4 +1,12 @@
-^.*\.Rproj$
-^\.Rproj\.user$
 ^init\.R$
 ^\.git$
+^.*\.Rproj$
+^\.Rproj\.user$
+^\.github$
+^renv$
+^renv\.lock$
+^\.Rprofile$
+^README\.Rmd$
+^jaspNorming\.jaspmodule$
+^.*\.tar\.gz$
+^.*\.zip$

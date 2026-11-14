@@ -92,5 +92,28 @@ Form {
             DoubleField { name: "ciLevel"; label: qsTr("Confidence level"); defaultValue: 0.90; min: 0.50; max: 0.999; enabled: includeCI.checked }
             DoubleField { name: "reliability"; label: qsTr("Reliability coefficient"); defaultValue: 0.90; min: 0.01; max: 0.999; enabled: includeCI.checked }
         }
+
+        Group {
+            title: qsTr("Save to Dataset")
+            Layout.columnSpan: 2
+
+            CheckBox { name: "saveNorm"; id: saveNorm; label: qsTr("Save norm scores") }
+            TextField {
+                name: "normColName"
+                label: qsTr("Norm score column name")
+                defaultValue: ""
+                fieldWidth: 140
+                enabled: saveNorm.checked
+            }
+
+            CheckBox { name: "savePerc"; id: savePerc; label: qsTr("Save percentiles") }
+            TextField {
+                name: "percColName"
+                label: qsTr("Percentile column name")
+                defaultValue: ""
+                fieldWidth: 140
+                enabled: savePerc.checked
+            }
+        }
     }
 }

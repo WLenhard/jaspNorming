@@ -5,14 +5,85 @@
 .normingPlotTheme <- function(legendPos = "right") {
   jaspGraphs::themeJaspRaw(fontsize = 12) +
     ggplot2::theme(
-      axis.title.x    = ggplot2::element_text(size = 12, face = "plain"),
-      axis.title.y    = ggplot2::element_text(size = 12, face = "plain"),
-      axis.text.x     = ggplot2::element_text(size = 10, colour = "black"),
-      axis.text.y     = ggplot2::element_text(size = 10, colour = "black"),
-      legend.title    = ggplot2::element_text(size = 11),
-      legend.text     = ggplot2::element_text(size = 9.5),
       legend.position = legendPos
     )
+}
+
+.normingAddCitations <- function(jaspResults, type = "continuous", options = list()) {
+  cites <- c(
+    "Lenhard, A., Lenhard, W., Suggate, S., & Segerer, R. (2018). A continuous solution to the norming problem. Assessment, 25(1), 112-125. https://doi.org/10.1177/1073191116656437"
+  )
+  
+  if (type %in% c("continuous", "conventional")) {
+    cites <- c(
+      cites,
+      "Lenhard, W., & Lenhard, A. (2021). Improvement of norm score quality via regression-based continuous norming. Educational and Psychological Measurement, 81(2), 229-261. https://doi.org/10.1177/0013164420928457",
+      "Gary, S., Lenhard, W., & Lenhard, A. (2021). Modelling norm scores with the cNORM package in R. Psych, 3(3), 501-521. https://doi.org/10.3390/psych3030033"
+    )
+  }
+  
+  if (type == "continuous" && !is.null(options$method)) {
+    if (options$method %in% c("betabinomial", "shash")) {
+      cites <- c(
+        cites,
+        "Lenhard, A., Lenhard, W., & Gary, S. (2019). Continuous norming of psychometric tests: A simulation study of parametric and semi-parametric approaches. PLoS ONE, 14(9), e0222279. https://doi.org/10.1371/journal.pone.0222279"
+      )
+    }
+    if (options$method == "shash") {
+      cites <- c(
+        cites,
+        "Jones, M. C., & Pewsey, A. (2009). Sinh-arcsinh distributions. Biometrika, 96(4), 761-780. https://doi.org/10.1093/biomet/asp053",
+        "Laurenz, R., & Lenhard, W. (2025). Comparison of cNORM and LMS methods for estimating reference percentile curves from biometric data. Scientific Reports, 15, 29580. https://doi.org/10.1038/s41598-025-29580-4"
+      )
+    } else if (options$method == "cmp") {
+      cites <- c(
+        cites,
+        "Conway, R. W., & Maxwell, W. L. (1962). A queuing model with state dependent service rates. Journal of Industrial Engineering, 13(2), 132-136.",
+        "Huang, A. (2017). Mean-parametrized Conway-Maxwell-Poisson regression models for dispersed counts. Statistical Modelling, 17(6), 359-380. https://doi.org/10.1177/1471082X17697749"
+      )
+    }
+  }
+  
+  usesWeights <- (!is.null(options$weights) && nzchar(options$weights)) ||
+    (type == "preparation" && length(options$stratVars) > 0L)
+  if (usesWeights) {
+    cites <- c(
+      cites,
+      "Gary, S., Lenhard, W., Lenhard, A., & Herzberg, D. S. (2023). A tutorial on automatic post-stratification and weighting in conventional and regression-based norming of psychometric tests. Behavior Research Methods, 56, 4632-4642. https://doi.org/10.3758/s13428-023-02207-0",
+      "Gary, S., Lenhard, A., Lenhard, W., & Herzberg, D. S. (2023). Reducing the bias of norm scores in non-representative samples: Weighting as an adjunct to continuous norming methods. Assessment, 30(8), 2491-2509. https://doi.org/10.1177/10731911231153832"
+    )
+  }
+  
+  jaspResults$addCitation(unique(cites))
+}
+
+.saveScaleColumn <- function(jaspResults, key, colName, values, deps) {
+  if (is.null(colName)) return()
+  colName <- trimws(colName)
+  if (!nzchar(colName)) return()
+  if (!jaspBase::jaspResultsCalledFromJasp()) return()
+  if (!is.null(jaspResults[[key]])) return()
+  
+  tryCatch({
+    if (!isTRUE(tryCatch(jaspBase:::.getColumnExists(colName), error = function(e) FALSE))) {
+      jaspBase::createColumns(colName)
+    }
+    colObj <- jaspBase::createJaspColumn(columnName = colName)
+    colObj$dependOn(deps)
+    jaspResults[[key]] <- colObj
+    colObj$setScale(as.numeric(values))
+  }, error = function(e) {
+    warnKey <- paste0(key, "_warn")
+    if (is.null(jaspResults[[warnKey]])) {
+      msg <- jaspBase::createJaspHtml(title = gettext("Column Save Notice"))
+      msg$dependOn(deps)
+      msg$text <- gettextf(
+        "<p>Could not save column <b>%s</b> to dataset: %s</p>",
+        colName, jaspBase::decodeColNames(conditionMessage(e))
+      )
+      jaspResults[[warnKey]] <- msg
+    }
+  })
 }
 
 .resolveScale <- function(scale, sdRange = 3.0) {

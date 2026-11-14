@@ -2,6 +2,8 @@
 
 #' @export
 normingPreparation <- function(jaspResults, dataset, options) {
+  .normingAddCitations(jaspResults, "preparation", options)
+  
   hasAge   <- options$age != ""
   hasStrat <- length(options$stratVars) > 0L
   
@@ -22,7 +24,10 @@ normingPreparation <- function(jaspResults, dataset, options) {
 # ---- Norm groups -------------------------------------------------------------
 
 .runGrouping <- function(jaspResults, dataset, options) {
-  if (!is.null(jaspResults[["groupTab"]]) && !is.null(jaspResults[["groupPlot"]]))
+  wantGroupCol <- isTRUE(options$saveGroups) && !is.null(options$groupColName) && nzchar(trimws(options$groupColName))
+  needGroupCol <- wantGroupCol && is.null(jaspResults[["savedGroupCol"]])
+  
+  if (!is.null(jaspResults[["groupTab"]]) && !is.null(jaspResults[["groupPlot"]]) && !needGroupCol)
     return()
   
   df <- if (is.null(dataset)) {
@@ -30,7 +35,10 @@ normingPreparation <- function(jaspResults, dataset, options) {
   } else {
     dataset[, options$age, drop = FALSE]
   }
-  ageVals <- stats::na.omit(.normingAsNumeric(df[[options$age]], options$age))
+  
+  ageFull  <- .normingAsNumeric(df[[options$age]], options$age)
+  validIdx <- which(!is.na(ageFull))
+  ageVals  <- ageFull[validIdx]
   
   if (length(ageVals) < 6L)
     jaspBase::.quitAnalysis(gettext("At least 6 valid observations are required."))
@@ -95,6 +103,18 @@ normingPreparation <- function(jaspResults, dataset, options) {
     plot$plotObject <- p
     jaspResults[["groupPlot"]] <- plot
   }
+  
+  if (wantGroupCol) {
+    fullGroups <- rep(NA_real_, length(ageFull))
+    fullGroups[validIdx] <- as.numeric(grpMidpoints)
+    .saveScaleColumn(
+      jaspResults = jaspResults,
+      key         = "savedGroupCol",
+      colName     = options$groupColName,
+      values      = fullGroups,
+      deps        = c(deps, "saveGroups", "groupColName")
+    )
+  }
 }
 
 # ---- Raking ------------------------------------------------------------------
@@ -126,17 +146,23 @@ normingPreparation <- function(jaspResults, dataset, options) {
 }
 
 .runRaking <- function(jaspResults, dataset, options) {
-  if (!is.null(jaspResults[["marginsTab"]]) && !is.null(jaspResults[["weightSummaryTab"]]))
+  wantWeightCol <- isTRUE(options$saveWeights) && !is.null(options$weightColName) && nzchar(trimws(options$weightColName))
+  needWeightCol <- wantWeightCol && is.null(jaspResults[["savedWeightCol"]])
+  
+  if (!is.null(jaspResults[["marginsTab"]]) && !is.null(jaspResults[["weightSummaryTab"]]) && !needWeightCol)
     return()
   
   stratVars <- unlist(options$stratVars)
-  df <- if (is.null(dataset)) {
+  dfFull <- if (is.null(dataset)) {
     jaspBase::.readDataSetToEnd(columns = stratVars)
   } else {
     dataset[, stratVars, drop = FALSE]
   }
-  df <- stats::na.omit(df)
-  nTotal <- nrow(df)
+  
+  nRowsFull <- nrow(dfFull)
+  validIdx  <- which(stats::complete.cases(dfFull))
+  df        <- dfFull[validIdx, , drop = FALSE]
+  nTotal    <- nrow(df)
   
   if (nTotal < 2L)
     jaspBase::.quitAnalysis(gettext("At least 2 complete observations across the stratification variables are required."))
@@ -249,5 +275,17 @@ normingPreparation <- function(jaspResults, dataset, options) {
     wTab$addRows(list(row))
     rakeFootnote(wTab)
     jaspResults[["weightSummaryTab"]] <- wTab
+  }
+  
+  if (wantWeightCol && !is.null(rakedWeights)) {
+    fullWeights <- rep(NA_real_, nRowsFull)
+    fullWeights[validIdx] <- as.numeric(rakedWeights)
+    .saveScaleColumn(
+      jaspResults = jaspResults,
+      key         = "savedWeightCol",
+      colName     = options$weightColName,
+      values      = fullWeights,
+      deps        = c(deps, "saveWeights", "weightColName")
+    )
   }
 }
